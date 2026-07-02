@@ -35,7 +35,7 @@ This saves your auth session to `.mm/mm_session.pickle` next to the script. Re-r
 ## Run the server
 
 ```bash
-python server.py
+python -m monarch_mcp
 ```
 
 The server uses stdio transport by default.
@@ -49,13 +49,14 @@ Add this to your Cursor MCP config (`mcp.json`):
   "mcpServers": {
     "monarch-money": {
       "command": "/Users/joshfunderburk/Desktop/monarch_mcp/.venv/bin/python",
-      "args": ["/Users/joshfunderburk/Desktop/monarch_mcp/server.py"]
+      "args": ["-m", "monarch_mcp"],
+      "cwd": "/Users/joshfunderburk/Desktop/monarch_mcp"
     }
   }
 }
 ```
 
-The session file path defaults to `.mm/mm_session.pickle` relative to `server.py`, so `MONARCH_SESSION_FILE` is optional. On Windows, point `command` at `.venv\\Scripts\\python.exe` and use Windows-style paths.
+The session file path defaults to `.mm/mm_session.pickle` in the repo root, so `MONARCH_SESSION_FILE` is optional. On Windows, point `command` at `.venv\\Scripts\\python.exe`, set `cwd` to the repo path, and use Windows-style paths.
 
 ## Environment variables
 
@@ -68,7 +69,7 @@ The session file path defaults to `.mm/mm_session.pickle` relative to `server.py
 
 All responses are slimmed before being returned: GraphQL `__typename` keys and null fields are stripped to keep tool output small.
 
-### Accounts
+### Accounts (read)
 - `get_accounts`
 - `get_account_type_options`
 - `get_recent_account_balances`
@@ -77,6 +78,13 @@ All responses are slimmed before being returned: GraphQL `__typename` keys and n
 - `get_aggregate_snapshots`
 - `get_account_holdings`
 - `get_institutions`
+
+### Accounts (write)
+- `request_accounts_refresh` — kicks off a sync and returns immediately (preferred for slow institutions)
+- `request_accounts_refresh_and_wait` — blocks until the sync completes or times out
+- `is_accounts_refresh_complete`
+- `create_manual_account`
+- `upload_account_balance_history`
 
 ### Transactions (read)
 - `get_transactions` — flattened rows by default; pass `verbose: true` for the full raw payload
@@ -109,14 +117,45 @@ All responses are slimmed before being returned: GraphQL `__typename` keys and n
 - `reset_budget`
 - `update_flexible_budget`
 
-### Other
-- `get_subscription_details`
-- `get_credit_history`
-- `request_accounts_refresh` — kicks off a sync and returns immediately (preferred for slow institutions)
-- `request_accounts_refresh_and_wait` — blocks until the sync completes or times out
-- `is_accounts_refresh_complete`
-- `create_manual_account`
-- `upload_account_balance_history`
+## Scripts
+
+Bulk maintenance and offline report tasks that are cheaper to run outside the MCP agent loop:
+
+### Recategorize transactions
+
+- `scripts/recategorize.py` — recategorize transactions by search criteria. Dry-run by default; pass `--apply` to commit.
+
+  ```bash
+  python scripts/recategorize.py --match "INTEREST CHARGE" --to-category "Financial Fees" --from-category "Interest"
+  python scripts/recategorize.py --match "INTEREST CHARGE" --to-category "Financial Fees" --from-category "Interest" --apply
+  ```
+
+- `scripts/fix_interest_categories.py` — legacy one-off script (superseded by `recategorize.py` for interest charges).
+
+### PDF reports
+
+Token-efficient pipeline: scripts fetch data to local JSON and generate a PDF. The agent should run these scripts rather than pulling balances through MCP.
+
+- `scripts/fetch_report_data.py` — fetch Monarch data for offline reports.
+
+  ```bash
+  python scripts/fetch_report_data.py --dataset snapshots
+  python scripts/fetch_report_data.py --dataset accounts
+  python scripts/fetch_report_data.py --dataset cashflow --start 2026-06-01 --end 2026-06-30
+  ```
+
+  Datasets: `snapshots` (monthly balances by account type), `accounts` (current account list), `cashflow` (summary for a date range). Output defaults to `reports/data/<dataset>.json`.
+
+- `scripts/generate_report.py` — build a PDF from fetched snapshot data.
+
+  ```bash
+  python scripts/fetch_report_data.py --dataset snapshots
+  python scripts/generate_report.py --month 2026-06
+  ```
+
+  Output defaults to `reports/monarch_report_YYYY-MM.pdf`. The first report section shows credit card debt paid off for the month and a trailing month-over-month chart.
+
+`reports/` is gitignored (contains personal financial data).
 
 ## Security notes
 
