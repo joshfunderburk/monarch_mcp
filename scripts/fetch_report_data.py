@@ -9,9 +9,9 @@ import os
 from datetime import date
 from typing import Any
 
+from monarch.client import get_client
 from monarch.errors import slim
-from monarch.tools.accounts import get_account_snapshots_by_type, get_accounts
-from monarch.tools.budgets import get_cashflow_summary
+from monarch.tools.accounts import get_accounts
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_SCRIPT_DIR)
@@ -72,7 +72,7 @@ async def fetch_dataset(
     account_types: set[str] | None,
 ) -> Any:
     if dataset == "snapshots":
-        response = await get_account_snapshots_by_type(
+        response = await get_client().get_account_snapshots_by_type(
             start_date=start_date,
             timeframe="month",
         )
@@ -81,7 +81,7 @@ async def fetch_dataset(
         response = await get_accounts()
         return [_slim_account(row) for row in response.get("accounts", [])]
     if dataset == "cashflow":
-        return await get_cashflow_summary(
+        return await get_client().get_cashflow_summary(
             start_date=start_date,
             end_date=end_date,
         )
