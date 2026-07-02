@@ -71,26 +71,3 @@ async def delete_transaction_category(category_id: str) -> bool:
     """Delete a transaction category."""
     return await get_client().delete_transaction_category(category_id)
 
-
-# ---------------------------------------------------------------------------
-# Tags (read)
-# ---------------------------------------------------------------------------
-
-
-@mcp.tool(annotations=READ_ONLY)
-@monarch_tool
-async def get_transaction_tags() -> dict[str, Any]:
-    """Get all transaction tags."""
-    return await get_client().get_transaction_tags()
-
-
-# ---------------------------------------------------------------------------
-# Tags (write)
-# ---------------------------------------------------------------------------
-
-
-@mcp.tool()
-@monarch_tool
-async def create_transaction_tag(name: str, color: str) -> dict[str, Any]:
-    """Create a new transaction tag."""
-    return await get_client().create_transaction_tag(name=name, color=color)

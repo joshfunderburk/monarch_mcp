@@ -192,39 +192,9 @@ async def get_recurring_transactions(
     )
 
 
-@mcp.tool(annotations=READ_ONLY)
-@monarch_tool
-async def get_transactions_summary() -> dict[str, Any]:
-    """Get global transaction aggregates for the account."""
-    return await get_client().get_transactions_summary()
-
-
 # ---------------------------------------------------------------------------
 # Transactions (write)
 # ---------------------------------------------------------------------------
-
-
-@mcp.tool()
-@monarch_tool
-async def create_transaction(
-    date: str,
-    account_id: str,
-    amount: float,
-    merchant_name: str,
-    category_id: str,
-    notes: str = "",
-    update_balance: bool = False,
-) -> dict[str, Any]:
-    """Create a new transaction."""
-    return await get_client().create_transaction(
-        date=date,
-        account_id=account_id,
-        amount=amount,
-        merchant_name=merchant_name,
-        category_id=category_id,
-        notes=notes,
-        update_balance=update_balance,
-    )
 
 
 @mcp.tool(annotations=DESTRUCTIVE)
@@ -332,13 +302,6 @@ async def bulk_update_transactions(
     results = await asyncio.gather(*(apply_row(row) for row in updates))
     failed = [r for r in results if r is not None]
     return {"updated": len(updates) - len(failed), "failed": failed}
-
-
-@mcp.tool(annotations=DESTRUCTIVE)
-@monarch_tool
-async def delete_transaction(transaction_id: str) -> bool:
-    """Delete a transaction by ID."""
-    return await get_client().delete_transaction(transaction_id)
 
 
 @mcp.tool(annotations=DESTRUCTIVE)

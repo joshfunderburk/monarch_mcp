@@ -130,19 +130,6 @@ async def get_account_history(
 
 @mcp.tool(annotations=READ_ONLY)
 @monarch_tool
-async def get_account_snapshots_by_type(
-    start_date: str,
-    timeframe: str,
-) -> dict[str, Any]:
-    """Get account balance snapshots grouped by account type."""
-    return await get_client().get_account_snapshots_by_type(
-        start_date=start_date,
-        timeframe=timeframe,
-    )
-
-
-@mcp.tool(annotations=READ_ONLY)
-@monarch_tool
 async def get_aggregate_snapshots(
     start_date: str | None = None,
     end_date: str | None = None,
@@ -163,97 +150,9 @@ async def get_aggregate_snapshots(
     )
 
 
-@mcp.tool(annotations=READ_ONLY)
-@monarch_tool
-async def get_account_holdings(account_id: str) -> dict[str, Any]:
-    """Get investment holdings for a brokerage-type account."""
-    return await get_client().get_account_holdings(account_id)
-
-
-@mcp.tool(annotations=READ_ONLY)
-@monarch_tool
-async def get_institutions() -> dict[str, Any]:
-    """Get linked institutions and their sync status."""
-    return await get_client().get_institutions()
-
-
 # ---------------------------------------------------------------------------
 # Accounts (write)
 # ---------------------------------------------------------------------------
-
-
-@mcp.tool()
-@monarch_tool
-async def request_accounts_refresh(
-    account_ids: list[str] | None = None,
-) -> dict[str, Any]:
-    """Kick off an account data refresh and return immediately.
-
-    account_ids=None refreshes all accounts. Does not wait for the sync to
-    finish; poll is_accounts_refresh_complete to check on it. Preferred over
-    request_accounts_refresh_and_wait for slow institutions, since it does
-    not hold the tool call open.
-    """
-    client = get_client()
-    if account_ids is None:
-        account_data = await client.get_accounts()
-        account_ids = [a["id"] for a in account_data["accounts"]]
-    await client.request_accounts_refresh(account_ids)
-    return {"success": True, "accounts_requested": len(account_ids)}
-
-
-@mcp.tool()
-@monarch_tool
-async def request_accounts_refresh_and_wait(
-    account_ids: list[str] | None = None,
-    timeout: int = 120,
-    delay: int = 5,
-) -> dict[str, Any]:
-    """Refresh account data and wait for completion.
-
-    account_ids=None refreshes all accounts. Raises if the refresh does not
-    complete within `timeout` seconds. This holds the tool call open while
-    waiting; for slow institutions prefer request_accounts_refresh plus
-    is_accounts_refresh_complete polling.
-    """
-    refreshed = await get_client().request_accounts_refresh_and_wait(
-        account_ids=account_ids, timeout=timeout, delay=delay
-    )
-    if not refreshed:
-        raise RuntimeError(
-            f"Account refresh did not complete within {timeout} seconds. "
-            "Use is_accounts_refresh_complete to poll for completion."
-        )
-    return {"success": True}
-
-
-@mcp.tool(annotations=READ_ONLY)
-@monarch_tool
-async def is_accounts_refresh_complete(
-    account_ids: list[str] | None = None,
-) -> bool:
-    """Check whether account refresh jobs have completed (all accounts if omitted)."""
-    return await get_client().is_accounts_refresh_complete(account_ids)
-
-
-@mcp.tool()
-@monarch_tool
-async def create_manual_account(
-    account_type: str,
-    account_sub_type: str,
-    is_in_net_worth: bool,
-    account_name: str,
-    account_balance: float = 0,
-) -> dict[str, Any]:
-    """Create a new manual account."""
-    return await get_client().create_manual_account(
-        account_type=account_type,
-        account_sub_type=account_sub_type,
-        is_in_net_worth=is_in_net_worth,
-        account_name=account_name,
-        account_balance=account_balance,
-    )
-
 
 @mcp.tool()
 @monarch_tool
