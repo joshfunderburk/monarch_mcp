@@ -3,6 +3,7 @@
 import asyncio
 import getpass
 import os
+import stat
 
 from monarchmoney import MonarchMoney, RequireMFAException
 
@@ -26,6 +27,8 @@ async def main() -> None:
         await mm.multi_factor_authenticate(email, password, code)
 
     mm.save_session()
+    os.chmod(os.path.dirname(SESSION_FILE), stat.S_IRWXU)
+    os.chmod(SESSION_FILE, stat.S_IRUSR | stat.S_IWUSR)
     print(f"Session saved to {SESSION_FILE}")
 
 

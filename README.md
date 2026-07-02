@@ -66,6 +66,8 @@ The session file path defaults to `.mm/mm_session.pickle` relative to `server.py
 
 ## Available tools
 
+All responses are slimmed before being returned: GraphQL `__typename` keys and null fields are stripped to keep tool output small.
+
 ### Accounts
 - `get_accounts`
 - `get_account_type_options`
@@ -77,7 +79,7 @@ The session file path defaults to `.mm/mm_session.pickle` relative to `server.py
 - `get_institutions`
 
 ### Transactions (read)
-- `get_transactions`
+- `get_transactions` — flattened rows by default; pass `verbose: true` for the full raw payload
 - `get_transaction_details`
 - `get_transaction_splits`
 - `find_duplicate_transactions`
@@ -87,6 +89,7 @@ The session file path defaults to `.mm/mm_session.pickle` relative to `server.py
 ### Transactions (write)
 - `create_transaction`
 - `update_transaction`
+- `bulk_update_transactions` — update many transactions in one call (different values per row, including tags)
 - `delete_transaction`
 - `set_transaction_tags`
 
@@ -109,7 +112,8 @@ The session file path defaults to `.mm/mm_session.pickle` relative to `server.py
 ### Other
 - `get_subscription_details`
 - `get_credit_history`
-- `request_accounts_refresh_and_wait`
+- `request_accounts_refresh` — kicks off a sync and returns immediately (preferred for slow institutions)
+- `request_accounts_refresh_and_wait` — blocks until the sync completes or times out
 - `is_accounts_refresh_complete`
 - `create_manual_account`
 - `upload_account_balance_history`
