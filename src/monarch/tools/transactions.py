@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Optional
+from typing import Any
 
-from monarch_mcp import DESTRUCTIVE, READ_ONLY, mcp
-from monarch_mcp.client import get_client
-from monarch_mcp.errors import monarch_tool
-
+from monarch.client import get_client
+from monarch.errors import monarch_tool
+from monarch.server import DESTRUCTIVE, READ_ONLY, mcp
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -67,23 +66,23 @@ def _flatten_transaction(txn: dict[str, Any]) -> dict[str, Any]:
 @mcp.tool(annotations=READ_ONLY)
 @monarch_tool
 async def get_transactions(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    limit: Optional[int] = None,
-    offset: Optional[int] = None,
-    search: Optional[str] = None,
-    category_ids: Optional[list[str]] = None,
-    tag_ids: Optional[list[str]] = None,
-    account_ids: Optional[list[str]] = None,
-    has_attachments: Optional[bool] = None,
-    has_notes: Optional[bool] = None,
-    needs_review: Optional[bool] = None,
-    hidden_from_reports: Optional[bool] = None,
-    is_split: Optional[bool] = None,
-    is_recurring: Optional[bool] = None,
-    imported_from_mint: Optional[bool] = None,
-    synced_from_institution: Optional[bool] = None,
-    transaction_visibility: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
+    search: str | None = None,
+    category_ids: list[str] | None = None,
+    tag_ids: list[str] | None = None,
+    account_ids: list[str] | None = None,
+    has_attachments: bool | None = None,
+    has_notes: bool | None = None,
+    needs_review: bool | None = None,
+    hidden_from_reports: bool | None = None,
+    is_split: bool | None = None,
+    is_recurring: bool | None = None,
+    imported_from_mint: bool | None = None,
+    synced_from_institution: bool | None = None,
+    transaction_visibility: str | None = None,
     verbose: bool = False,
 ) -> dict[str, Any]:
     """Get transactions with optional filters and pagination.
@@ -183,8 +182,8 @@ async def find_duplicate_transactions(
 @mcp.tool(annotations=READ_ONLY)
 @monarch_tool
 async def get_recurring_transactions(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> dict[str, Any]:
     """Get upcoming recurring transaction items, including merchant and account."""
     return await get_client().get_recurring_transactions(
@@ -232,15 +231,15 @@ async def create_transaction(
 @monarch_tool
 async def update_transaction(
     transaction_id: str,
-    category_id: Optional[str] = None,
-    merchant_name: Optional[str] = None,
-    goal_id: Optional[str] = None,
-    amount: Optional[float] = None,
-    date: Optional[str] = None,
-    hide_from_reports: Optional[bool] = None,
-    needs_review: Optional[bool] = None,
-    reviewed: Optional[bool] = None,
-    notes: Optional[str] = None,
+    category_id: str | None = None,
+    merchant_name: str | None = None,
+    goal_id: str | None = None,
+    amount: float | None = None,
+    date: str | None = None,
+    hide_from_reports: bool | None = None,
+    needs_review: bool | None = None,
+    reviewed: bool | None = None,
+    notes: str | None = None,
 ) -> dict[str, Any]:
     """Update fields on an existing transaction.
 
@@ -314,7 +313,7 @@ async def bulk_update_transactions(
     client = get_client()
     semaphore = asyncio.Semaphore(5)
 
-    async def apply_row(row: dict[str, Any]) -> Optional[dict[str, Any]]:
+    async def apply_row(row: dict[str, Any]) -> dict[str, Any] | None:
         transaction_id = row["transaction_id"]
         fields = {k: v for k, v in row.items() if k in _BULK_UPDATE_FIELDS}
         tag_ids = row.get("tag_ids")

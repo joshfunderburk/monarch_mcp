@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import os
 import pickle
-from typing import Optional
 
 from monarchmoney import LoginFailedException, MonarchMoney
 
 _PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
-_REPO_ROOT = os.path.dirname(_PACKAGE_DIR)
+# src layout: the repo root is two levels above the package directory.
+_REPO_ROOT = os.path.dirname(os.path.dirname(_PACKAGE_DIR))
 DEFAULT_SESSION_FILE = os.path.join(_REPO_ROOT, ".mm", "mm_session.pickle")
 SESSION_FILE = os.environ.get("MONARCH_SESSION_FILE", DEFAULT_SESSION_FILE)
 try:
@@ -20,7 +20,7 @@ except ValueError as exc:
         f"{os.environ.get('MONARCH_TIMEOUT')!r}."
     ) from exc
 
-_client: Optional[MonarchMoney] = None
+_client: MonarchMoney | None = None
 
 
 def reset_client() -> None:
@@ -38,7 +38,7 @@ def get_client() -> MonarchMoney:
     if not os.path.exists(SESSION_FILE):
         raise RuntimeError(
             f"No session file found at {SESSION_FILE}. "
-            "Run `python login.py` to create one."
+            "Run `monarch-login` to create one."
         )
 
     mm = MonarchMoney(session_file=SESSION_FILE, timeout=API_TIMEOUT)
@@ -47,7 +47,7 @@ def get_client() -> MonarchMoney:
     except (LoginFailedException, pickle.UnpicklingError, EOFError) as exc:
         raise RuntimeError(
             f"Session file {SESSION_FILE} is invalid or corrupt: {exc}. "
-            "Re-run `python login.py` to create a new one."
+            "Re-run `monarch-login` to create a new one."
         ) from exc
     _client = mm
     return _client

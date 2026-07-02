@@ -1,0 +1,1 @@
+"""Monarch Money MCP server."""

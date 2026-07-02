@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from monarch_mcp import DESTRUCTIVE, READ_ONLY, mcp
-from monarch_mcp.client import get_client
-from monarch_mcp.errors import monarch_tool
+from monarch.client import get_client
+from monarch.errors import monarch_tool
+from monarch.server import DESTRUCTIVE, READ_ONLY, mcp
 
 
 def resolve_category_id(categories: list[dict[str, Any]], name: str) -> str:

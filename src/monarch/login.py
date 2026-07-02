@@ -1,4 +1,4 @@
-"""One-time interactive login to create a Monarch Money session pickle."""
+"""Interactive login to create a Monarch Money session pickle."""
 
 import asyncio
 import getpass
@@ -7,13 +7,10 @@ import stat
 
 from monarchmoney import MonarchMoney, RequireMFAException
 
-DEFAULT_SESSION_FILE = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), ".mm", "mm_session.pickle"
-)
-SESSION_FILE = os.environ.get("MONARCH_SESSION_FILE", DEFAULT_SESSION_FILE)
+from monarch.client import SESSION_FILE
 
 
-async def main() -> None:
+async def _login() -> None:
     mm = MonarchMoney(session_file=SESSION_FILE)
     email = input("Email: ")
     password = getpass.getpass("Password: ")
@@ -32,5 +29,9 @@ async def main() -> None:
     print(f"Session saved to {SESSION_FILE}")
 
 
+def main() -> None:
+    asyncio.run(_login())
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

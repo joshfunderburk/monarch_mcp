@@ -2,6 +2,20 @@
 
 A local stdio MCP server that wraps the [`monarchmoneycommunity`](https://pypi.org/project/monarchmoneycommunity/) Python library, exposing Monarch Money accounts, transactions, budgets, and more as MCP tools for Cursor and other MCP clients.
 
+## Project layout
+
+```
+├── src/monarch/        # the MCP server package
+│   ├── server.py       # FastMCP instance, tool annotations, entry point
+│   ├── client.py       # MonarchMoney client lifecycle and configuration
+│   ├── errors.py       # error mapping and response slimming
+│   ├── login.py        # interactive login (monarch-login)
+│   └── tools/          # tool modules, one per domain
+├── scripts/            # offline bulk-maintenance and report scripts
+├── tests/              # unit tests for the pure data-shaping logic
+└── reports/            # generated report data and PDFs (gitignored)
+```
+
 ## Prerequisites
 
 - Python 3.12+ (the server uses PEP 695 generic syntax)
@@ -18,51 +32,55 @@ source .venv/bin/activate
 
 On Windows, activate with `.venv\Scripts\activate` instead.
 
-2. Install dependencies:
+2. Install the package in editable mode (add `[dev]` for lint/test tools):
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
+# or, for development:
+pip install -e ".[dev]"
 ```
 
 3. Create a session file (one-time, or when the token expires):
 
 ```bash
-python login.py
+monarch-login
 ```
 
-This saves your auth session to `.mm/mm_session.pickle` next to the script. Re-running `login.py` always performs a fresh login, so use it any time API calls start failing with a "session is expired" error.
+This saves your auth session to `.mm/mm_session.pickle` in the repo root. Re-running `monarch-login` always performs a fresh login, so use it any time API calls start failing with a "session is expired" error.
 
 ## Run the server
 
 ```bash
-python -m monarch_mcp
+monarch-mcp
+# equivalently:
+python -m monarch
 ```
 
 The server uses stdio transport by default.
 
 ## Cursor configuration
 
-Add this to your Cursor MCP config (`mcp.json`):
+Add this to your Cursor MCP config (`mcp.json`), pointing at the venv where the package is installed:
 
 ```json
 {
   "mcpServers": {
     "monarch-money": {
-      "command": "/Users/joshfunderburk/Desktop/monarch_mcp/.venv/bin/python",
-      "args": ["-m", "monarch_mcp"],
-      "cwd": "/Users/joshfunderburk/Desktop/monarch_mcp"
+      "command": "/path/to/monarch_mcp/.venv/bin/python",
+      "args": ["-m", "monarch"],
+      "cwd": "/path/to/monarch_mcp"
     }
   }
 }
 ```
 
-The session file path defaults to `.mm/mm_session.pickle` in the repo root, so `MONARCH_SESSION_FILE` is optional. On Windows, point `command` at `.venv\\Scripts\\python.exe`, set `cwd` to the repo path, and use Windows-style paths.
+The session file path defaults to `.mm/mm_session.pickle` in the repo root, so `MONARCH_SESSION_FILE` is optional. On Windows, point `command` at `.venv\\Scripts\\python.exe` and use Windows-style paths.
 
 ## Environment variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MONARCH_SESSION_FILE` | `<script dir>/.mm/mm_session.pickle` | Path to the saved session pickle |
+| `MONARCH_SESSION_FILE` | `<repo root>/.mm/mm_session.pickle` | Path to the saved session pickle |
 | `MONARCH_TIMEOUT` | `30` | Timeout in seconds for each Monarch API call |
 
 ## Available tools
@@ -119,7 +137,7 @@ All responses are slimmed before being returned: GraphQL `__typename` keys and n
 
 ## Scripts
 
-Bulk maintenance and offline report tasks that are cheaper to run outside the MCP agent loop:
+Bulk maintenance and offline report tasks that are cheaper to run outside the MCP agent loop. The scripts import the installed `monarch` package, so run them from the venv where `pip install -e .` was done.
 
 ### Recategorize transactions
 
@@ -129,8 +147,6 @@ Bulk maintenance and offline report tasks that are cheaper to run outside the MC
   python scripts/recategorize.py --match "INTEREST CHARGE" --to-category "Financial Fees" --from-category "Interest"
   python scripts/recategorize.py --match "INTEREST CHARGE" --to-category "Financial Fees" --from-category "Interest" --apply
   ```
-
-- `scripts/fix_interest_categories.py` — legacy one-off script (superseded by `recategorize.py` for interest charges).
 
 ### PDF reports
 
@@ -157,6 +173,16 @@ Token-efficient pipeline: scripts fetch data to local JSON and generate a PDF. T
 
 `reports/` is gitignored (contains personal financial data).
 
+## Development
+
+```bash
+pip install -e ".[dev]"
+ruff check .        # lint
+pytest              # run tests
+```
+
+CI runs both on every push and pull request.
+
 ## Security notes
 
 - `.mm/` and `*.pickle` are gitignored. Do not commit session files.
@@ -164,10 +190,10 @@ Token-efficient pipeline: scripts fetch data to local JSON and generate a PDF. T
 
 ## Troubleshooting
 
-**No session file found** — Run `python login.py`.
+**No session file found** — Run `monarch-login`.
 
-**Monarch Money session is expired or invalid** — Re-run `python login.py`. It forces a fresh login and overwrites the stale session file.
+**Monarch Money session is expired or invalid** — Re-run `monarch-login`. It forces a fresh login and overwrites the stale session file.
 
 **Network error / timeout** — Increase `MONARCH_TIMEOUT` (e.g. `60`) for large transaction pulls.
 
-**Import errors** — Ensure dependencies are installed: `pip install -r requirements.txt`.
+**Import errors** — Ensure the package is installed: `pip install -e .`.

@@ -4,23 +4,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import os
-import sys
 from datetime import date
 
-_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-_ROOT = os.path.dirname(_SCRIPT_DIR)
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
-
-from monarch_mcp.tools.categories import (  # noqa: E402
-    get_transaction_categories,
-    resolve_category_id,
-)
-from monarch_mcp.tools.transactions import (  # noqa: E402
-    get_transactions,
-    update_transaction,
-)
+from monarch.tools.categories import get_transaction_categories, resolve_category_id
+from monarch.tools.transactions import get_transactions, update_transaction
 
 PAGE_SIZE = 100
 SAMPLE_SIZE = 5

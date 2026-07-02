@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from functools import wraps
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 import aiohttp
 from gql.transport.exceptions import TransportQueryError, TransportServerError
 from monarchmoney import RequestFailedException
 
-from monarch_mcp.client import reset_client
+from monarch.client import reset_client
 
 
-def _slim(value: Any) -> Any:
+def slim(value: Any) -> Any:
     """Recursively strip GraphQL noise from API responses.
 
     Removes `__typename` keys and keys with None values, which carry no
@@ -20,12 +21,12 @@ def _slim(value: Any) -> Any:
     """
     if isinstance(value, dict):
         return {
-            k: _slim(v)
+            k: slim(v)
             for k, v in value.items()
             if k != "__typename" and v is not None
         }
     if isinstance(value, list):
-        return [_slim(item) for item in value]
+        return [slim(item) for item in value]
     return value
 
 
@@ -37,13 +38,13 @@ def monarch_tool[**P, R](
     @wraps(fn)
     async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         try:
-            return _slim(await fn(*args, **kwargs))
+            return slim(await fn(*args, **kwargs))
         except TransportServerError as exc:
             if exc.code in (401, 403):
                 reset_client()
                 raise RuntimeError(
                     "Monarch Money session is expired or invalid. "
-                    "Re-run `python login.py` to create a new session."
+                    "Re-run `monarch-login` to create a new session."
                 ) from exc
             raise RuntimeError(
                 f"Monarch Money server error (HTTP {exc.code}): {exc}"

@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "monarch-mcp"
+version = "0.1.0"
+description = "Local stdio MCP server exposing Monarch Money accounts, transactions, budgets, and reports as tools."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "LicenseRef-Proprietary"
+license-files = ["LICENSE"]
+dependencies = [
+    "mcp[cli]>=1.2.0",
+    "monarchmoneycommunity>=1.4.0",
+    "matplotlib>=3.8.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.8",
+]
+
+[project.scripts]
+monarch-mcp = "monarch.server:main"
+monarch-login = "monarch.login:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = [
+    "E4", # pycodestyle: imports
+    "E7", # pycodestyle: statements
+    "E9", # pycodestyle: runtime errors
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # bugbear
+    "UP", # pyupgrade
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["monarch"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

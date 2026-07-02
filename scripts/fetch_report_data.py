@@ -6,22 +6,15 @@ import argparse
 import asyncio
 import json
 import os
-import sys
 from datetime import date
 from typing import Any
 
+from monarch.errors import slim
+from monarch.tools.accounts import get_account_snapshots_by_type, get_accounts
+from monarch.tools.budgets import get_cashflow_summary
+
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_SCRIPT_DIR)
-if _ROOT not in sys.path:
-    sys.path.insert(0, _ROOT)
-
-from monarch_mcp.errors import _slim  # noqa: E402
-from monarch_mcp.tools.accounts import (  # noqa: E402
-    get_account_snapshots_by_type,
-    get_accounts,
-)
-from monarch_mcp.tools.budgets import get_cashflow_summary  # noqa: E402
-
 DATASETS = ("snapshots", "accounts", "cashflow")
 DEFAULT_DATA_DIR = os.path.join(_ROOT, "reports", "data")
 
@@ -141,7 +134,7 @@ async def main() -> None:
         end_date=args.end,
         account_types=account_types,
     )
-    payload = _slim(payload)
+    payload = slim(payload)
 
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as handle:

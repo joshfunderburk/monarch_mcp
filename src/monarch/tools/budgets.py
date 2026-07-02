@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
-from monarch_mcp import DESTRUCTIVE, READ_ONLY, mcp
-from monarch_mcp.client import get_client
-from monarch_mcp.errors import monarch_tool
-
+from monarch.client import get_client
+from monarch.errors import monarch_tool
+from monarch.server import DESTRUCTIVE, READ_ONLY, mcp
 
 # ---------------------------------------------------------------------------
 # Budgets and cashflow (read)
@@ -17,8 +16,8 @@ from monarch_mcp.errors import monarch_tool
 @mcp.tool(annotations=READ_ONLY)
 @monarch_tool
 async def get_budgets(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     use_legacy_goals: bool = False,
     use_v2_goals: bool = True,
 ) -> dict[str, Any]:
@@ -74,9 +73,9 @@ async def get_cashflow_summary(
 @monarch_tool
 async def set_budget_amount(
     amount: float,
-    category_id: Optional[str] = None,
-    category_group_id: Optional[str] = None,
-    start_date: Optional[str] = None,
+    category_id: str | None = None,
+    category_group_id: str | None = None,
+    start_date: str | None = None,
     apply_to_future: bool = False,
 ) -> dict[str, Any]:
     """Set a budget amount for a category or category group."""
@@ -92,7 +91,7 @@ async def set_budget_amount(
 @mcp.tool(annotations=DESTRUCTIVE)
 @monarch_tool
 async def reset_budget(
-    start_date: Optional[str] = None,
+    start_date: str | None = None,
 ) -> dict[str, Any]:
     """Reset ALL planned budget amounts for a month back to defaults.
 
@@ -107,7 +106,7 @@ async def reset_budget(
 @monarch_tool
 async def update_flexible_budget(
     amount: float,
-    start_date: Optional[str] = None,
+    start_date: str | None = None,
     apply_to_future: bool = False,
 ) -> dict[str, Any]:
     """Update the flexible budget bucket amount."""

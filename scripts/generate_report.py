@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import sys
 from calendar import month_name
 from datetime import date
 from typing import Any

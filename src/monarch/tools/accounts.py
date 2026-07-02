@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 
 from monarchmoney.monarchmoney import BalanceHistoryRow
 
-from monarch_mcp import READ_ONLY, mcp
-from monarch_mcp.client import get_client
-from monarch_mcp.errors import monarch_tool
-
+from monarch.client import get_client
+from monarch.errors import monarch_tool
+from monarch.server import READ_ONLY, mcp
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -112,8 +111,8 @@ async def get_recent_account_balances(lookback_days: int = 90) -> dict[str, Any]
 @monarch_tool
 async def get_account_history(
     account_id: str,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> list[dict[str, Any]]:
     """Get historical daily balance snapshots for a single account.
 
@@ -145,9 +144,9 @@ async def get_account_snapshots_by_type(
 @mcp.tool(annotations=READ_ONLY)
 @monarch_tool
 async def get_aggregate_snapshots(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    account_type: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    account_type: str | None = None,
 ) -> dict[str, Any]:
     """Get daily aggregate net-value snapshots across all accounts.
 
@@ -186,7 +185,7 @@ async def get_institutions() -> dict[str, Any]:
 @mcp.tool()
 @monarch_tool
 async def request_accounts_refresh(
-    account_ids: Optional[list[str]] = None,
+    account_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     """Kick off an account data refresh and return immediately.
 
@@ -206,7 +205,7 @@ async def request_accounts_refresh(
 @mcp.tool()
 @monarch_tool
 async def request_accounts_refresh_and_wait(
-    account_ids: Optional[list[str]] = None,
+    account_ids: list[str] | None = None,
     timeout: int = 120,
     delay: int = 5,
 ) -> dict[str, Any]:
@@ -231,7 +230,7 @@ async def request_accounts_refresh_and_wait(
 @mcp.tool(annotations=READ_ONLY)
 @monarch_tool
 async def is_accounts_refresh_complete(
-    account_ids: Optional[list[str]] = None,
+    account_ids: list[str] | None = None,
 ) -> bool:
     """Check whether account refresh jobs have completed (all accounts if omitted)."""
     return await get_client().is_accounts_refresh_complete(account_ids)
@@ -261,8 +260,8 @@ async def create_manual_account(
 async def upload_account_balance_history(
     account_id: str,
     rows: list[dict[str, Any]],
-    timeout: Optional[int] = None,
-    delay: Optional[int] = None,
+    timeout: int | None = None,
+    delay: int | None = None,
 ) -> dict[str, Any]:
     """Upload account balance history from rows with date and amount (or balance).
 
