@@ -24,7 +24,11 @@ if _ROOT not in sys.path:
   sys.path.insert(0, _ROOT)
 
 DEFAULT_DATA_PATH = os.path.join(_ROOT, "reports", "data", "paydown.json")
+DEFAULT_SPENDING_PATH = os.path.join(_ROOT, "reports", "data", "spending.json")
+DEFAULT_BUDGET_PATH = os.path.join(_ROOT, "reports", "data", "budget.json")
 PAYDOWN_CHART_START = "2026-04"
+SPENDING_CATEGORY_LIMIT = 10
+SPENDING_MERCHANT_LIMIT = 10
 DEFAULT_REPORT_DIR = os.path.join(_ROOT, "reports")
 TEMPLATE_DIR = os.path.join(_ROOT, "reports", "template")
 BUILD_DIR = os.path.join(_ROOT, "reports", "build")
@@ -233,6 +237,319 @@ def _tracked_accounts_for_month(
   return accounts
 
 
+def _load_json_if_exists(path: str) -> Any | None:
+  if not os.path.exists(path):
+    return None
+  with open(path, encoding="utf-8") as handle:
+    return json.load(handle)
+
+
+def _spending_rows_for(
+  rows: list[dict[str, Any]],
+  *,
+  kind: str,
+  month_key: str,
+) -> list[dict[str, Any]]:
+  return [row for row in rows if row.get("kind") == kind and row.get("month") == month_key]
+
+
+def _is_controllable_expense(row: dict[str, Any]) -> bool:
+  """Expense category rows minus debt payments (spending we can't control)."""
+  return row.get("group_type") == "expense" and not row.get("debt_payment")
+
+
+def _month_expense_totals(
+  rows: list[dict[str, Any]],
+  month_key: str,
+) -> tuple[float, float]:
+  """Return (controllable expense, debt payments) for a month."""
+  expense = 0.0
+  debt = 0.0
+  for row in _spending_rows_for(rows, kind="category", month_key=month_key):
+    if row.get("group_type") != "expense":
+      continue
+    amount = abs(float(row.get("amount") or 0.0))
+    if row.get("debt_payment"):
+      debt += amount
+    else:
+      expense += amount
+  return expense, debt
+
+
+def build_spending_section(
+  rows: list[dict[str, Any]],
+  *,
+  year: int,
+  month: int,
+  history_months: int = 12,
+) -> dict[str, Any] | None:
+  target_key = _month_key(year, month)
+  prior_year, prior_month = _shift_month(year, month, -1)
+  prior_key = _month_key(prior_year, prior_month)
+
+  summaries = {
+    row["month"]: row
+    for row in rows
+    if row.get("kind") == "summary" and row.get("month")
+  }
+  if target_key not in summaries:
+    return None
+
+  monthly: list[dict[str, Any]] = []
+  for offset in range(history_months - 1, -1, -1):
+    point_year, point_month = _shift_month(year, month, -offset)
+    point_key = _month_key(point_year, point_month)
+    summary = summaries.get(point_key)
+    if summary is None:
+      continue
+    expense, _ = _month_expense_totals(rows, point_key)
+    monthly.append(
+      {
+        "month": point_key,
+        "month_label": _month_label(point_key),
+        "expense": expense,
+        "income": float(summary.get("income") or 0.0),
+        "is_target": point_key == target_key,
+      }
+    )
+
+  prior_by_category = {
+    row.get("name"): abs(float(row.get("amount") or 0.0))
+    for row in _spending_rows_for(rows, kind="category", month_key=prior_key)
+    if _is_controllable_expense(row)
+  }
+  category_rows = [
+    row
+    for row in _spending_rows_for(rows, kind="category", month_key=target_key)
+    if _is_controllable_expense(row) and row.get("amount")
+  ]
+  category_rows.sort(key=lambda row: abs(float(row["amount"])), reverse=True)
+
+  categories: list[dict[str, Any]] = []
+  other_total = 0.0
+  for index, row in enumerate(category_rows):
+    amount = abs(float(row["amount"]))
+    if index < SPENDING_CATEGORY_LIMIT:
+      categories.append(
+        {
+          "name": row.get("name") or "Uncategorized",
+          "amount": amount,
+          "prior_amount": prior_by_category.get(row.get("name")),
+        }
+      )
+    else:
+      other_total += amount
+  if other_total > 0:
+    categories.append(
+      {"name": "Everything else", "amount": other_total, "prior_amount": None}
+    )
+
+  merchant_rows = _spending_rows_for(rows, kind="merchant", month_key=target_key)
+  merchant_rows.sort(key=lambda row: abs(float(row.get("expense") or 0.0)), reverse=True)
+  merchants = [
+    {
+      "name": row.get("name") or "Unknown",
+      "amount": abs(float(row.get("expense") or 0.0)),
+    }
+    for row in merchant_rows[:SPENDING_MERCHANT_LIMIT]
+  ]
+
+  target_summary = summaries[target_key]
+  total_expense, debt_payment_total = _month_expense_totals(rows, target_key)
+  prior_expense: float | None = None
+  if prior_key in summaries:
+    prior_expense, _ = _month_expense_totals(rows, prior_key)
+  return {
+    "total_expense": total_expense,
+    "prior_expense": prior_expense,
+    "debt_payment_total": debt_payment_total,
+    "total_income": float(target_summary.get("income") or 0.0),
+    "monthly": monthly,
+    "categories": categories,
+    "merchants": merchants,
+  }
+
+
+def _budget_totals_for(
+  budget: dict[str, Any],
+  month_key: str,
+) -> dict[str, Any] | None:
+  for row in budget.get("totals_by_month", []):
+    if row.get("month") == month_key:
+      return row
+  return None
+
+
+def _month_has_budget(totals: dict[str, Any] | None) -> bool:
+  if totals is None:
+    return False
+  planned_income = float(totals.get("income_planned") or 0.0)
+  planned_expenses = float(totals.get("expenses_planned") or 0.0)
+  return planned_income > 0 or planned_expenses > 0
+
+
+def build_budget_section(
+  budget: dict[str, Any],
+  *,
+  year: int,
+  month: int,
+) -> dict[str, Any] | None:
+  """Budget vs actual for the report month.
+
+  If the report month has no planned amounts at all (budgets not yet set
+  up), fall back to the next month that does and present it as a
+  plan-only view without actuals.
+  """
+  target_key = _month_key(year, month)
+  totals = _budget_totals_for(budget, target_key)
+  budget_key = target_key
+  plan_only = False
+
+  if not _month_has_budget(totals):
+    for offset in (1, 2):
+      next_year, next_month = _shift_month(year, month, offset)
+      next_key = _month_key(next_year, next_month)
+      next_totals = _budget_totals_for(budget, next_key)
+      if _month_has_budget(next_totals):
+        totals = next_totals
+        budget_key = next_key
+        plan_only = True
+        break
+
+  if not _month_has_budget(totals):
+    return None
+
+  rows: list[dict[str, Any]] = []
+  for category in budget.get("categories", []):
+    if category.get("group_type") != "expense":
+      continue
+    monthly = next(
+      (row for row in category.get("monthly", []) if row.get("month") == budget_key),
+      None,
+    )
+    if monthly is None:
+      continue
+    planned = float(monthly.get("planned") or 0.0)
+    actual = abs(float(monthly.get("actual") or 0.0))
+    if plan_only:
+      if planned == 0:
+        continue
+      rows.append(
+        {
+          "name": category.get("name") or "Uncategorized",
+          "group": category.get("group"),
+          "planned": planned,
+        }
+      )
+      continue
+    if planned == 0 and actual == 0:
+      continue
+    remaining = monthly.get("remaining")
+    rows.append(
+      {
+        "name": category.get("name") or "Uncategorized",
+        "group": category.get("group"),
+        "planned": planned,
+        "actual": actual,
+        "remaining": float(remaining) if remaining is not None else planned - actual,
+      }
+    )
+  if plan_only:
+    rows.sort(key=lambda row: row["planned"], reverse=True)
+  else:
+    rows.sort(key=lambda row: (row["planned"], row["actual"]), reverse=True)
+
+  return {
+    "month": budget_key,
+    "month_label": _month_label(budget_key),
+    "plan_only": plan_only,
+    "income_planned": float(totals.get("income_planned") or 0.0),
+    "income_actual": float(totals.get("income_actual") or 0.0),
+    "expenses_planned": float(totals.get("expenses_planned") or 0.0),
+    "expenses_actual": abs(float(totals.get("expenses_actual") or 0.0)),
+    "rows": rows,
+  }
+
+
+def _trailing_average(values: list[float], months: int = 3) -> float | None:
+  recent = values[-months:]
+  if not recent:
+    return None
+  return sum(recent) / len(recent)
+
+
+def build_forecast_section(
+  *,
+  budget: dict[str, Any] | None,
+  spending_rows: list[dict[str, Any]] | None,
+  debt_paid_off_series: list[dict[str, Any]],
+  year: int,
+  month: int,
+) -> dict[str, Any] | None:
+  next_year, next_month = _shift_month(year, month, 1)
+  next_key = _month_key(next_year, next_month)
+
+  income_history: list[float] = []
+  expense_history: list[float] = []
+  if spending_rows:
+    summaries = sorted(
+      (row for row in spending_rows if row.get("kind") == "summary" and row.get("month")),
+      key=lambda row: row["month"],
+    )
+    target_key = _month_key(year, month)
+    for row in summaries:
+      if row["month"] > target_key:
+        continue
+      income_history.append(float(row.get("income") or 0.0))
+      expense_history.append(abs(float(row.get("expense") or 0.0)))
+
+  income = None
+  expenses = None
+  income_basis = None
+  expenses_basis = None
+
+  next_totals = _budget_totals_for(budget, next_key) if budget else None
+  if next_totals is not None:
+    planned_income = float(next_totals.get("income_planned") or 0.0)
+    planned_expenses = float(next_totals.get("expenses_planned") or 0.0)
+    if planned_income > 0:
+      income = planned_income
+      income_basis = "budget"
+    if planned_expenses > 0:
+      expenses = planned_expenses
+      expenses_basis = "budget"
+
+  if income is None:
+    income = _trailing_average(income_history)
+    income_basis = "3-month average"
+  if expenses is None:
+    expenses = _trailing_average(expense_history)
+    expenses_basis = "3-month average"
+
+  if income is None or expenses is None:
+    return None
+
+  net_history = [
+    inc - exp for inc, exp in zip(income_history, expense_history)
+  ]
+  recent_actual_net = _trailing_average(net_history)
+  avg_paid_off = _trailing_average(
+    [float(point["paid_off"]) for point in debt_paid_off_series]
+  )
+
+  return {
+    "month": next_key,
+    "month_label": _month_label(next_key),
+    "projected_income": income,
+    "income_basis": income_basis,
+    "projected_expenses": expenses,
+    "expenses_basis": expenses_basis,
+    "available": income - expenses,
+    "recent_actual_net": recent_actual_net,
+    "recent_paid_off": avg_paid_off,
+  }
+
+
 def _default_out_path(year: int, month: int) -> str:
   return os.path.join(DEFAULT_REPORT_DIR, f"monarch_report_{year:04d}-{month:02d}.pdf")
 
@@ -254,6 +571,16 @@ def build_parser() -> argparse.ArgumentParser:
     "--data",
     default=DEFAULT_DATA_PATH,
     help="Snapshots JSON path. Default: reports/data/paydown.json",
+  )
+  parser.add_argument(
+    "--spending-data",
+    default=DEFAULT_SPENDING_PATH,
+    help="Spending JSON path. Default: reports/data/spending.json (section skipped if missing).",
+  )
+  parser.add_argument(
+    "--budget-data",
+    default=DEFAULT_BUDGET_PATH,
+    help="Budget JSON path. Default: reports/data/budget.json (section skipped if missing).",
   )
   parser.add_argument(
     "--out",
@@ -293,6 +620,9 @@ def build_report_payload(
   series: list[dict[str, Any]],
   debt_label: str,
   accounts: list[dict[str, Any]] | None = None,
+  spending: dict[str, Any] | None = None,
+  budget: dict[str, Any] | None = None,
+  forecast: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
   month_year, month_num = report_month.split("-")
   paid_off = float(target["paid_off"])
@@ -307,6 +637,9 @@ def build_report_payload(
     },
     "series": series,
     "accounts": accounts or [],
+    "spending": spending,
+    "budget": budget,
+    "forecast": forecast,
   }
 
 
@@ -502,12 +835,43 @@ def main() -> None:
     month=month,
   )
 
+  spending_rows = _load_json_if_exists(args.spending_data)
+  budget_data = _load_json_if_exists(args.budget_data)
+
+  spending = None
+  if spending_rows:
+    spending = build_spending_section(
+      spending_rows,
+      year=year,
+      month=month,
+      history_months=args.history_months,
+    )
+    if spending is None:
+      print(f"Warning: no spending summary for {args.month}; skipping spending section.")
+
+  budget = None
+  if budget_data:
+    budget = build_budget_section(budget_data, year=year, month=month)
+    if budget is None:
+      print(f"Warning: no budget totals for {args.month}; skipping budget section.")
+
+  forecast = build_forecast_section(
+    budget=budget_data,
+    spending_rows=spending_rows,
+    debt_paid_off_series=chart_series,
+    year=year,
+    month=month,
+  )
+
   payload = build_report_payload(
     report_month=target_key,
     target=target,
     series=chart_series,
     debt_label=debt_label,
     accounts=accounts,
+    spending=spending,
+    budget=budget,
+    forecast=forecast,
   )
 
   def rebuild() -> str:

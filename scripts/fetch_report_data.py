@@ -11,13 +11,15 @@ from collections import defaultdict
 from datetime import date
 from typing import Any
 
+from gql import gql
+
 from monarch.client import get_client
 from monarch.errors import slim
 from monarch.tools.accounts import get_accounts
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_SCRIPT_DIR)
-DATASETS = ("snapshots", "paydown", "accounts", "cashflow")
+DATASETS = ("snapshots", "paydown", "accounts", "cashflow", "spending", "budget")
 DEFAULT_DATA_DIR = os.path.join(_ROOT, "reports", "data")
 
 # Accounts included in the monthly paydown report.
@@ -26,6 +28,39 @@ PAYDOWN_GROUPS: dict[str, set[tuple[str, str]]] = {
     "line_of_credit": {("loan", "line_of_credit")},
 }
 PAYDOWN_KEYS = set().union(*PAYDOWN_GROUPS.values())
+
+# Expense categories that are debt payments rather than discretionary
+# spending. Flagged in the spending dataset so the report can exclude them.
+DEBT_PAYMENT_CATEGORIES = {
+    "Auto Payment",
+    "Mortgage",
+    "Student Loans",
+    "Loan Repayment",
+}
+
+# Merchant aggregates count both sides of transfers (e.g. loan payments), so
+# the merchant leaderboard is fetched with an explicit category filter that
+# keeps only non-debt expense/income categories.
+_MERCHANT_SPENDING_QUERY = """
+  query Web_GetCashFlowPage($filters: TransactionFilterInput) {
+    byMerchant: aggregates(filters: $filters, groupBy: ["merchant"]) {
+      groupBy {
+        merchant {
+          id
+          name
+          __typename
+        }
+        __typename
+      }
+      summary {
+        sumIncome
+        sumExpense
+        __typename
+      }
+      __typename
+    }
+  }
+"""
 
 
 def _default_start() -> str:
@@ -72,6 +107,15 @@ def _month_cutoff(month_key: str) -> str:
     year, month = (int(part) for part in month_key.split("-"))
     last_day = monthrange(year, month)[1]
     return f"{year:04d}-{month:02d}-{last_day:02d}"
+
+
+def _next_month_end(value: str) -> str:
+    """End of the month after the given date — budgets need one future month."""
+    parsed = _parse_iso_date(value)
+    year, month = parsed.year, parsed.month + 1
+    if month > 12:
+        year, month = year + 1, 1
+    return _month_cutoff(f"{year:04d}-{month:02d}")
 
 
 def _snapshot_balance(row: dict[str, Any]) -> float:
@@ -178,6 +222,196 @@ async def _fetch_paydown_snapshots(
     return rows
 
 
+async def _non_debt_category_ids(client: Any) -> list[str]:
+    """Category ids for the merchant leaderboard filter.
+
+    Drops debt-payment categories and transfer-type categories: loan and
+    credit card payments net to zero in category totals but would still
+    show up on the expense side of merchant aggregates.
+    """
+    response = await client.get_transaction_categories()
+    ids: list[str] = []
+    for category in response.get("categories", []):
+        if category.get("name") in DEBT_PAYMENT_CATEGORIES:
+            continue
+        if (category.get("group") or {}).get("type") == "transfer":
+            continue
+        ids.append(category["id"])
+    return ids
+
+
+async def _fetch_month_merchants(
+    client: Any,
+    *,
+    start: str,
+    end: str,
+    category_ids: list[str],
+) -> list[dict[str, Any]]:
+    response = await client.gql_call(
+        operation="Web_GetCashFlowPage",
+        graphql_query=gql(_MERCHANT_SPENDING_QUERY),
+        variables={
+            "filters": {
+                "search": "",
+                "categories": category_ids,
+                "accounts": [],
+                "tags": [],
+                "startDate": start,
+                "endDate": end,
+            },
+        },
+    )
+    return response.get("byMerchant", [])
+
+
+async def _fetch_month_spending(
+    month_key: str,
+    client: Any,
+    *,
+    merchant_category_ids: list[str],
+) -> list[dict[str, Any]]:
+    year, month = (int(part) for part in month_key.split("-"))
+    start = f"{year:04d}-{month:02d}-01"
+    end = _month_cutoff(month_key)
+    response, merchant_items = await asyncio.gather(
+        client.get_cashflow(start_date=start, end_date=end),
+        _fetch_month_merchants(
+            client,
+            start=start,
+            end=end,
+            category_ids=merchant_category_ids,
+        ),
+    )
+
+    rows: list[dict[str, Any]] = []
+    summary_items = response.get("summary", [])
+    if summary_items:
+        summary = summary_items[0].get("summary", {})
+        rows.append(
+            {
+                "month": month_key,
+                "kind": "summary",
+                "income": summary.get("sumIncome"),
+                "expense": summary.get("sumExpense"),
+                "savings": summary.get("savings"),
+            }
+        )
+
+    for item in response.get("byCategory", []):
+        category = (item.get("groupBy") or {}).get("category") or {}
+        group = category.get("group") or {}
+        amount = (item.get("summary") or {}).get("sum")
+        if amount is None:
+            continue
+        row = {
+            "month": month_key,
+            "kind": "category",
+            "name": category.get("name"),
+            "group_type": group.get("type"),
+            "amount": amount,
+        }
+        if category.get("name") in DEBT_PAYMENT_CATEGORIES:
+            row["debt_payment"] = True
+        rows.append(row)
+
+    for item in merchant_items:
+        merchant = (item.get("groupBy") or {}).get("merchant") or {}
+        summary = item.get("summary") or {}
+        expense = summary.get("sumExpense") or 0.0
+        if not expense:
+            continue
+        rows.append(
+            {
+                "month": month_key,
+                "kind": "merchant",
+                "name": merchant.get("name"),
+                "expense": expense,
+            }
+        )
+    return rows
+
+
+async def _fetch_spending(
+    *,
+    start_date: str,
+    end_date: str,
+) -> list[dict[str, Any]]:
+    months = _iter_months(_parse_iso_date(start_date), _parse_iso_date(end_date))
+    client = get_client()
+    merchant_category_ids = await _non_debt_category_ids(client)
+    results = await asyncio.gather(
+        *(
+            _fetch_month_spending(
+                month_key,
+                client,
+                merchant_category_ids=merchant_category_ids,
+            )
+            for month_key in months
+        )
+    )
+    rows: list[dict[str, Any]] = []
+    for month_rows in results:
+        rows.extend(month_rows)
+    return rows
+
+
+def _budget_amount_row(month_amount: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "month": (month_amount.get("month") or "")[:7],
+        "planned": month_amount.get("plannedCashFlowAmount"),
+        "actual": month_amount.get("actualAmount"),
+        "remaining": month_amount.get("remainingAmount"),
+        "rollover": month_amount.get("previousMonthRolloverAmount"),
+    }
+
+
+def _normalize_budget(response: dict[str, Any]) -> dict[str, Any]:
+    budget_data = response.get("budgetData") or {}
+
+    category_info: dict[str, dict[str, Any]] = {}
+    for group in response.get("categoryGroups", []):
+        for category in group.get("categories", []):
+            category_info[category["id"]] = {
+                "name": category.get("name"),
+                "group": group.get("name"),
+                "group_type": group.get("type"),
+            }
+
+    categories: list[dict[str, Any]] = []
+    for item in budget_data.get("monthlyAmountsByCategory", []):
+        category_id = (item.get("category") or {}).get("id")
+        info = category_info.get(category_id, {})
+        categories.append(
+            {
+                "id": category_id,
+                "name": info.get("name"),
+                "group": info.get("group"),
+                "group_type": info.get("group_type"),
+                "monthly": [
+                    _budget_amount_row(row)
+                    for row in item.get("monthlyAmounts", [])
+                ],
+            }
+        )
+
+    totals: list[dict[str, Any]] = []
+    for row in budget_data.get("totalsByMonth", []):
+        income = row.get("totalIncome") or {}
+        expenses = row.get("totalExpenses") or {}
+        totals.append(
+            {
+                "month": (row.get("month") or "")[:7],
+                "income_planned": income.get("plannedAmount"),
+                "income_actual": income.get("actualAmount"),
+                "expenses_planned": expenses.get("plannedAmount"),
+                "expenses_actual": expenses.get("actualAmount"),
+                "expenses_remaining": expenses.get("remainingAmount"),
+            }
+        )
+
+    return {"totals_by_month": totals, "categories": categories}
+
+
 def _normalize_snapshots(
     response: dict[str, Any],
     *,
@@ -225,6 +459,17 @@ async def fetch_dataset(
             start_date=start_date,
             end_date=end_date,
         )
+    if dataset == "spending":
+        return await _fetch_spending(
+            start_date=start_date,
+            end_date=end_date,
+        )
+    if dataset == "budget":
+        response = await get_client().get_budgets(
+            start_date=start_date,
+            end_date=_next_month_end(end_date),
+        )
+        return _normalize_budget(response)
     raise ValueError(f"Unsupported dataset: {dataset}")
 
 

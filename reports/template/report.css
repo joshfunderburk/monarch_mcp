@@ -182,6 +182,11 @@ body {
   color: var(--text);
 }
 
+.account-table th.align-left,
+.account-table td.align-left {
+  text-align: left;
+}
+
 .account-table td:first-child {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -194,6 +199,198 @@ body {
 
 .account-table td.negative {
   color: #b3261e;
+}
+
+/* Shared section layout */
+.report-section {
+  margin-top: 28px;
+}
+
+.report-section[hidden] {
+  display: none;
+}
+
+.summary-note {
+  font-size: 10px;
+  margin: 6px 0 0;
+  opacity: 0.75;
+}
+
+/* Spending */
+.spending-top {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  margin-bottom: 14px;
+  break-inside: avoid;
+}
+
+.spending-top .summary-card {
+  flex: 0 0 2.4in;
+  margin-bottom: 0;
+  align-self: center;
+}
+
+.spending-mom {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.chart-wrap-short {
+  height: 170px;
+}
+
+.spending-bottom {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  break-inside: avoid;
+}
+
+.spending-categories {
+  flex: 1 1 55%;
+  min-width: 0;
+}
+
+.spending-merchants {
+  flex: 1 1 45%;
+  min-width: 0;
+}
+
+/* Budget */
+.budget-stats {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+  break-inside: avoid;
+}
+
+.stat-card {
+  flex: 1 1 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+}
+
+.stat-heading {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.stat-amount {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.stat-amount.positive {
+  color: var(--peach-dark);
+}
+
+.stat-amount.negative {
+  color: #b3261e;
+}
+
+.stat-note {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin: 2px 0 0;
+}
+
+.budget-table th:nth-child(1) {
+  width: 28%;
+}
+
+.budget-table th.budget-bar-col {
+  width: 20%;
+}
+
+.budget-table th:nth-child(3),
+.budget-table th:nth-child(4),
+.budget-table th:nth-child(5) {
+  width: 17%;
+}
+
+.budget-bar-cell {
+  vertical-align: middle;
+}
+
+.budget-bar-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--plum-tint);
+  overflow: hidden;
+}
+
+.budget-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--peach);
+}
+
+.budget-bar-fill.over {
+  background: #b3261e;
+}
+
+/* Forecast */
+.forecast-layout {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  break-inside: avoid;
+}
+
+.forecast-hero {
+  flex: 0 0 3.15in;
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.forecast-breakdown {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.forecast-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.forecast-table td {
+  padding: 6px 2px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.forecast-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.forecast-table .forecast-total td {
+  font-weight: 700;
+  border-bottom: none;
+  color: var(--plum-dark);
+}
+
+.forecast-reference {
+  margin-top: 10px;
+  color: var(--text-muted);
+}
+
+.forecast-reference td {
+  color: var(--text-muted);
+  font-size: 10px;
+  border-bottom: none;
+  padding: 3px 2px;
 }
 
 /* Chart panel */
@@ -227,5 +424,15 @@ body {
   .page {
     max-width: none;
     padding: 0;
+  }
+
+  .debt-section,
+  .spending-top,
+  .spending-bottom,
+  .budget-stats,
+  .forecast-layout,
+  .budget-table tr,
+  #forecast-section {
+    break-inside: avoid;
   }
 }

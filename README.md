@@ -160,19 +160,26 @@ Token-efficient pipeline: scripts fetch data to local JSON and generate a PDF. T
   python scripts/fetch_report_data.py --dataset cashflow --start 2026-06-01 --end 2026-06-30
   ```
 
-  Datasets: `snapshots` (monthly balances by account type), `accounts` (current account list), `cashflow` (summary for a date range). Output defaults to `reports/data/<dataset>.json`.
+  Datasets: `snapshots` (monthly balances by account type), `paydown` (per-account credit card and line of credit balances), `accounts` (current account list), `cashflow` (summary for a date range), `spending` (monthly totals, by-category, and by-merchant aggregates), `budget` (planned vs actual by category, fetched through the month after `--end` for forecasting). Output defaults to `reports/data/<dataset>.json`.
 
 - `scripts/generate_report.py` — build a PDF handout from fetched JSON (HTML/CSS template + Chart.js, exported via Playwright).
 
   ```bash
   python scripts/fetch_report_data.py --dataset paydown
+  python scripts/fetch_report_data.py --dataset spending
+  python scripts/fetch_report_data.py --dataset budget
   python scripts/generate_report.py --month 2026-06
   python scripts/generate_report.py --month 2026-06 --preview
   ```
 
   Output defaults to `reports/monarch_report_YYYY-MM.pdf`. Design lives in `reports/template/` (`report.css`, `report.html`). One-time setup: `playwright install chromium`.
 
-  The first report section shows credit card & line of credit debt paid off for the month and a trailing month-over-month chart.
+  Report sections:
+
+  - **Debt Pay Down** — credit card & line of credit debt paid off for the month, per-account balances, and a trailing month-over-month chart. Requires `paydown.json`.
+  - **Spending** — controllable spending only (excludes debt-payment categories: Auto Payment, Mortgage, Student Loans, Loan Repayment). Total shows how much was excluded. Month-over-month chart, spending by category (vs prior month), and top-10 merchants (loan servicers and transfers filtered out). Requires `spending.json`; skipped if missing.
+  - **Budget** — planned vs actual by category with progress bars. If the report month has no planned amounts, falls back to the next budgeted month as a plan-only view. Requires `budget.json`; skipped if missing.
+  - **Debt Pay Down Forecast** — money available for debt pay down next month (projected income minus projected spending, from budget plans when available, otherwise trailing 3-month averages), with recent actual surplus and paid-off averages for reference.
 
 `reports/data/`, `reports/build/`, and `reports/*.pdf` are gitignored (personal financial data and build artifacts). `reports/template/` is tracked.
 

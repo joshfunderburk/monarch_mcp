@@ -41,10 +41,127 @@
         </div>
       </div>
     </section>
+
+    <section id="spending-section" class="report-section" aria-label="Spending" hidden>
+      <h2 class="section-title">Spending</h2>
+
+      <div class="spending-top">
+        <div class="summary-card">
+          <p class="summary-heading">Total Spending</p>
+          <div class="amount" id="spending-amount"></div>
+          <p class="summary-note" id="spending-delta"></p>
+          <p class="summary-note" id="spending-exclusion"></p>
+        </div>
+
+        <div class="panel spending-mom">
+          <h3 class="chart-title">Spending month over month</h3>
+          <div class="chart-wrap chart-wrap-short">
+            <canvas id="spending-mom-chart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="spending-bottom">
+        <div class="panel spending-categories">
+          <h3 class="chart-title">Spending by category</h3>
+          <div class="chart-wrap" id="category-chart-wrap">
+            <canvas id="category-chart"></canvas>
+          </div>
+        </div>
+
+        <div class="spending-merchants">
+          <table class="account-table" id="merchant-table">
+            <thead>
+              <tr>
+                <th>Top Merchants</th>
+                <th>Spent</th>
+                <th>% of Total</th>
+              </tr>
+            </thead>
+            <tbody id="merchant-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="budget-section" class="report-section" aria-label="Budget" hidden>
+      <h2 class="section-title" id="budget-title">Budget</h2>
+
+      <div class="budget-stats">
+        <div class="stat-card">
+          <p class="stat-heading" id="budget-income-heading">Income</p>
+          <div class="stat-amount" id="budget-income-actual"></div>
+          <p class="stat-note" id="budget-income-note"></p>
+        </div>
+        <div class="stat-card">
+          <p class="stat-heading" id="budget-expenses-heading">Expenses</p>
+          <div class="stat-amount" id="budget-expenses-actual"></div>
+          <p class="stat-note" id="budget-expenses-note"></p>
+        </div>
+        <div class="stat-card">
+          <p class="stat-heading" id="budget-remaining-heading">Left to Spend</p>
+          <div class="stat-amount" id="budget-remaining"></div>
+          <p class="stat-note" id="budget-remaining-note"></p>
+        </div>
+      </div>
+
+      <table class="account-table budget-table" id="budget-table">
+        <thead>
+          <tr id="budget-table-head"></tr>
+        </thead>
+        <tbody id="budget-table-body"></tbody>
+      </table>
+    </section>
+
+    <section id="forecast-section" class="report-section" aria-label="Forecast" hidden>
+      <h2 class="section-title" id="forecast-title">Debt Pay Down Forecast</h2>
+
+      <div class="forecast-layout">
+        <div class="summary-card forecast-hero">
+          <p class="summary-heading" id="forecast-heading"></p>
+          <div class="amount" id="forecast-amount"></div>
+          <p class="summary-note" id="forecast-note"></p>
+        </div>
+
+        <div class="panel forecast-breakdown">
+          <h3 class="chart-title">How this is calculated</h3>
+          <table class="forecast-table">
+            <tbody>
+              <tr>
+                <td id="forecast-income-label">Projected income</td>
+                <td class="num" id="forecast-income"></td>
+              </tr>
+              <tr>
+                <td id="forecast-expenses-label">Projected spending</td>
+                <td class="num" id="forecast-expenses"></td>
+              </tr>
+              <tr class="forecast-total">
+                <td>Available for debt pay down</td>
+                <td class="num" id="forecast-available"></td>
+              </tr>
+            </tbody>
+          </table>
+          <table class="forecast-table forecast-reference">
+            <tbody>
+              <tr>
+                <td>Actual monthly surplus (3-mo avg)</td>
+                <td class="num" id="forecast-recent-net"></td>
+              </tr>
+              <tr>
+                <td>Actual debt paid off (3-mo avg)</td>
+                <td class="num" id="forecast-recent-paid"></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </article>
 
   <script>
     const REPORT_DATA = __REPORT_DATA__;
+
+    const FONT_FAMILY = "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
 
     function formatCurrency(amount) {
       return new Intl.NumberFormat("en-US", {
@@ -52,6 +169,15 @@
         currency: "USD",
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
+      }).format(amount);
+    }
+
+    function formatCurrencyWhole(amount) {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
       }).format(amount);
     }
 
@@ -76,14 +202,22 @@
       return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
     }
 
-    function renderReport() {
-      const data = REPORT_DATA;
-      const paidOff = data.target.paid_off;
-      const isPositive = paidOff >= 0;
-      const accentClass = isPositive ? "positive" : "negative";
+    function axisTicks(muted) {
+      return {
+        color: muted,
+        font: { size: 10, family: FONT_FAMILY },
+      };
+    }
 
-      document.getElementById("generated-date").textContent =
-        `Generated ${data.generated_date}`;
+    function shortMonthLabel(monthLabel) {
+      const [name, year] = monthLabel.split(" ");
+      return `${name.slice(0, 3)} '${year.slice(2)}`;
+    }
+
+    function renderDebtSection(data) {
+      const paidOff = data.target.paid_off;
+      const accentClass = paidOff >= 0 ? "positive" : "negative";
+
       document.getElementById("chart-title").textContent =
         "Paid off month over month";
       const summaryAmountEl = document.getElementById("summary-amount");
@@ -125,7 +259,7 @@
       );
 
       const ctx = document.getElementById("paid-off-chart").getContext("2d");
-      window.reportChart = new Chart(ctx, {
+      new Chart(ctx, {
         data: {
           labels,
           datasets: [
@@ -164,12 +298,7 @@
               labels: {
                 boxWidth: 10,
                 color: muted,
-                font: { size: 10, family: "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" },
-              },
-            },
-            tooltip: {
-              callbacks: {
-                label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
+                font: { size: 10, family: FONT_FAMILY },
               },
             },
           },
@@ -177,26 +306,359 @@
             x: {
               grid: { display: false },
               ticks: {
-                color: muted,
-                font: { size: 10, family: "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" },
+                ...axisTicks(muted),
                 maxRotation: 45,
                 minRotation: 45,
               },
             },
             y: {
-              grid: {
-                color: grid,
-                drawBorder: false,
-              },
+              grid: { color: grid, drawBorder: false },
               ticks: {
-                color: muted,
-                font: { size: 10, family: "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" },
+                ...axisTicks(muted),
                 callback: (value) => formatAxisCurrency(value),
               },
             },
           },
         },
       });
+    }
+
+    function renderSpendingSection(spending, data) {
+      const section = document.getElementById("spending-section");
+      section.hidden = false;
+
+      const accent = cssVar("--peach");
+      const barDefault = cssVar("--bar-default");
+      const plum = cssVar("--plum");
+      const muted = cssVar("--muted");
+      const grid = cssVar("--grid");
+
+      document.getElementById("spending-amount").textContent =
+        formatCurrency(spending.total_expense);
+
+      const deltaEl = document.getElementById("spending-delta");
+      if (spending.prior_expense != null) {
+        const delta = spending.total_expense - spending.prior_expense;
+        const direction = delta <= 0 ? "less" : "more";
+        deltaEl.textContent =
+          `${formatCurrencyWhole(Math.abs(delta))} ${direction} than last month`;
+      } else {
+        deltaEl.remove();
+      }
+
+      const exclusionEl = document.getElementById("spending-exclusion");
+      if (spending.debt_payment_total > 0) {
+        exclusionEl.textContent =
+          `Excludes ${formatCurrencyWhole(spending.debt_payment_total)} in debt payments`;
+      } else {
+        exclusionEl.remove();
+      }
+
+      const momLabels = spending.monthly.map((point) => shortMonthLabel(point.month_label));
+      const momValues = spending.monthly.map((point) => point.expense);
+      const momColors = spending.monthly.map((point) =>
+        point.is_target ? accent : barDefault
+      );
+
+      const momCtx = document.getElementById("spending-mom-chart").getContext("2d");
+      new Chart(momCtx, {
+        type: "bar",
+        data: {
+          labels: momLabels,
+          datasets: [
+            {
+              label: "Spending",
+              data: momValues,
+              backgroundColor: momColors,
+              borderRadius: 5,
+              maxBarThickness: 34,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 0 },
+          plugins: { legend: { display: false } },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: { ...axisTicks(muted), maxRotation: 45, minRotation: 45 },
+            },
+            y: {
+              grid: { color: grid, drawBorder: false },
+              ticks: {
+                ...axisTicks(muted),
+                callback: (value) => formatAxisCurrency(value),
+              },
+            },
+          },
+        },
+      });
+
+      const categories = spending.categories || [];
+      const hasPrior = categories.some((row) => row.prior_amount != null);
+      const catWrap = document.getElementById("category-chart-wrap");
+      catWrap.style.height = `${Math.max(140, categories.length * 22 + 40)}px`;
+
+      const catDatasets = [
+        {
+          label: data.month_label,
+          data: categories.map((row) => row.amount),
+          backgroundColor: accent,
+          borderRadius: 4,
+          maxBarThickness: 12,
+        },
+      ];
+      if (hasPrior) {
+        catDatasets.push({
+          label: "Prior month",
+          data: categories.map((row) => row.prior_amount),
+          backgroundColor: barDefault,
+          borderRadius: 4,
+          maxBarThickness: 12,
+        });
+      }
+
+      const catCtx = document.getElementById("category-chart").getContext("2d");
+      new Chart(catCtx, {
+        type: "bar",
+        data: {
+          labels: categories.map((row) => row.name),
+          datasets: catDatasets,
+        },
+        options: {
+          indexAxis: "y",
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 0 },
+          plugins: {
+            legend: {
+              display: hasPrior,
+              position: "top",
+              align: "end",
+              labels: {
+                boxWidth: 10,
+                color: muted,
+                font: { size: 10, family: FONT_FAMILY },
+              },
+            },
+          },
+          scales: {
+            x: {
+              grid: { color: grid, drawBorder: false },
+              ticks: {
+                ...axisTicks(muted),
+                callback: (value) => formatAxisCurrency(value),
+              },
+            },
+            y: {
+              grid: { display: false },
+              ticks: axisTicks(muted),
+            },
+          },
+        },
+      });
+
+      const merchantBody = document.getElementById("merchant-table-body");
+      merchantBody.innerHTML = "";
+      for (const merchant of spending.merchants || []) {
+        const row = document.createElement("tr");
+
+        const nameCell = document.createElement("td");
+        nameCell.textContent = merchant.name;
+        row.appendChild(nameCell);
+
+        const amountCell = document.createElement("td");
+        amountCell.textContent = formatCurrency(merchant.amount);
+        row.appendChild(amountCell);
+
+        const shareCell = document.createElement("td");
+        const share = spending.total_expense > 0
+          ? (merchant.amount / spending.total_expense) * 100
+          : 0;
+        shareCell.textContent = `${share.toFixed(1)}%`;
+        row.appendChild(shareCell);
+
+        merchantBody.appendChild(row);
+      }
+    }
+
+    function makeCell(tr, text, className) {
+      const cell = document.createElement("td");
+      cell.textContent = text;
+      if (className) cell.classList.add(className);
+      tr.appendChild(cell);
+      return cell;
+    }
+
+    function makeHeadCell(tr, text, className) {
+      const cell = document.createElement("th");
+      cell.textContent = text;
+      if (className) cell.classList.add(className);
+      tr.appendChild(cell);
+      return cell;
+    }
+
+    function renderBudgetSection(budget, data) {
+      const section = document.getElementById("budget-section");
+      section.hidden = false;
+
+      const head = document.getElementById("budget-table-head");
+      const body = document.getElementById("budget-table-body");
+      head.innerHTML = "";
+      body.innerHTML = "";
+
+      if (budget.plan_only) {
+        document.getElementById("budget-title").textContent =
+          `Budget — ${budget.month_label} Plan`;
+
+        document.getElementById("budget-income-heading").textContent = "Expected Income";
+        document.getElementById("budget-income-actual").textContent =
+          formatCurrencyWhole(budget.income_planned);
+        document.getElementById("budget-income-note").textContent = "planned";
+
+        document.getElementById("budget-expenses-heading").textContent = "Planned Expenses";
+        document.getElementById("budget-expenses-actual").textContent =
+          formatCurrencyWhole(budget.expenses_planned);
+        document.getElementById("budget-expenses-note").textContent = "budgeted";
+
+        const surplus = budget.income_planned - budget.expenses_planned;
+        document.getElementById("budget-remaining-heading").textContent = "Planned Surplus";
+        const remainingEl = document.getElementById("budget-remaining");
+        remainingEl.textContent = formatCurrencyWhole(surplus);
+        remainingEl.classList.add(surplus >= 0 ? "positive" : "negative");
+        document.getElementById("budget-remaining-note").textContent =
+          "income minus planned expenses";
+
+        makeHeadCell(head, "Category");
+        makeHeadCell(head, "Group", "align-left");
+        makeHeadCell(head, "Budget");
+
+        for (const row of budget.rows || []) {
+          const tr = document.createElement("tr");
+          makeCell(tr, row.name);
+          makeCell(tr, row.group || "", "align-left");
+          makeCell(tr, formatCurrencyWhole(row.planned));
+          body.appendChild(tr);
+        }
+        return;
+      }
+
+      document.getElementById("budget-title").textContent = "Budget";
+
+      document.getElementById("budget-income-actual").textContent =
+        formatCurrencyWhole(budget.income_actual);
+      document.getElementById("budget-income-note").textContent =
+        budget.income_planned > 0
+          ? `of ${formatCurrencyWhole(budget.income_planned)} expected`
+          : "received";
+
+      document.getElementById("budget-expenses-actual").textContent =
+        formatCurrencyWhole(budget.expenses_actual);
+      document.getElementById("budget-expenses-note").textContent =
+        budget.expenses_planned > 0
+          ? `of ${formatCurrencyWhole(budget.expenses_planned)} budgeted`
+          : "spent";
+
+      const remaining = budget.expenses_planned - budget.expenses_actual;
+      const remainingEl = document.getElementById("budget-remaining");
+      remainingEl.textContent = formatCurrencyWhole(remaining);
+      remainingEl.classList.add(remaining >= 0 ? "positive" : "negative");
+      document.getElementById("budget-remaining-note").textContent =
+        remaining >= 0 ? "under budget" : "over budget";
+
+      makeHeadCell(head, "Category");
+      makeHeadCell(head, "", "budget-bar-col");
+      makeHeadCell(head, "Budget");
+      makeHeadCell(head, "Actual");
+      makeHeadCell(head, "Remaining");
+
+      for (const row of budget.rows || []) {
+        const tr = document.createElement("tr");
+        makeCell(tr, row.name);
+
+        const barCell = document.createElement("td");
+        barCell.className = "budget-bar-cell";
+        const track = document.createElement("div");
+        track.className = "budget-bar-track";
+        const fill = document.createElement("div");
+        const pct = row.planned > 0 ? (row.actual / row.planned) * 100 : 100;
+        fill.className = "budget-bar-fill" + (pct > 100 ? " over" : "");
+        fill.style.width = `${Math.min(pct, 100)}%`;
+        track.appendChild(fill);
+        barCell.appendChild(track);
+        tr.appendChild(barCell);
+
+        makeCell(tr, formatCurrencyWhole(row.planned));
+        makeCell(tr, formatCurrency(row.actual));
+        makeCell(
+          tr,
+          formatCurrency(row.remaining),
+          row.remaining >= 0 ? "positive" : "negative"
+        );
+
+        body.appendChild(tr);
+      }
+    }
+
+    function renderForecastSection(forecast) {
+      const section = document.getElementById("forecast-section");
+      section.hidden = false;
+
+      document.getElementById("forecast-heading").textContent =
+        `Available for Debt Pay Down — ${forecast.month_label}`;
+
+      const amountEl = document.getElementById("forecast-amount");
+      amountEl.textContent = formatCurrency(forecast.available);
+      amountEl.classList.add(forecast.available >= 0 ? "positive" : "negative");
+
+      document.getElementById("forecast-note").textContent =
+        "Projected income minus projected spending";
+
+      document.getElementById("forecast-income-label").textContent =
+        `Projected income (${forecast.income_basis})`;
+      document.getElementById("forecast-income").textContent =
+        formatCurrency(forecast.projected_income);
+
+      document.getElementById("forecast-expenses-label").textContent =
+        `Projected spending (${forecast.expenses_basis})`;
+      document.getElementById("forecast-expenses").textContent =
+        `−${formatCurrency(forecast.projected_expenses)}`;
+
+      document.getElementById("forecast-available").textContent =
+        formatCurrency(forecast.available);
+
+      const netEl = document.getElementById("forecast-recent-net");
+      if (forecast.recent_actual_net != null) {
+        netEl.textContent = formatCurrencySigned(forecast.recent_actual_net);
+      } else {
+        netEl.closest("tr").remove();
+      }
+
+      const paidEl = document.getElementById("forecast-recent-paid");
+      if (forecast.recent_paid_off != null) {
+        paidEl.textContent = formatCurrency(forecast.recent_paid_off);
+      } else {
+        paidEl.closest("tr").remove();
+      }
+    }
+
+    function renderReport() {
+      const data = REPORT_DATA;
+      document.getElementById("generated-date").textContent =
+        `${data.month_label} — Generated ${data.generated_date}`;
+
+      renderDebtSection(data);
+      if (data.spending) {
+        renderSpendingSection(data.spending, data);
+      }
+      if (data.budget) {
+        renderBudgetSection(data.budget, data);
+      }
+      if (data.forecast) {
+        renderForecastSection(data.forecast);
+      }
 
       window.reportReady = true;
     }
