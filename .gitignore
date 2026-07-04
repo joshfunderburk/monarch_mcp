@@ -5,7 +5,9 @@ __pycache__/
 venv/
 *.pyc
 .env
-reports/
+reports/data/
+reports/build/
+reports/*.pdf
 *.egg-info/
 dist/
 build/

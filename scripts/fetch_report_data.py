@@ -6,6 +6,8 @@ import argparse
 import asyncio
 import json
 import os
+from calendar import monthrange
+from collections import defaultdict
 from datetime import date
 from typing import Any
 
@@ -15,8 +17,15 @@ from monarch.tools.accounts import get_accounts
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_SCRIPT_DIR)
-DATASETS = ("snapshots", "accounts", "cashflow")
+DATASETS = ("snapshots", "paydown", "accounts", "cashflow")
 DEFAULT_DATA_DIR = os.path.join(_ROOT, "reports", "data")
+
+# Accounts included in the monthly paydown report.
+PAYDOWN_GROUPS: dict[str, set[tuple[str, str]]] = {
+    "credit_card": {("credit", "credit_card")},
+    "line_of_credit": {("loan", "line_of_credit")},
+}
+PAYDOWN_KEYS = set().union(*PAYDOWN_GROUPS.values())
 
 
 def _default_start() -> str:
@@ -41,6 +50,132 @@ def _slim_account(row: dict[str, Any]) -> dict[str, Any]:
         "subtype": subtype.get("name") if isinstance(subtype, dict) else subtype,
         "balance": row.get("currentBalance"),
     }
+
+
+def _parse_iso_date(value: str) -> date:
+    return date.fromisoformat(value[:10])
+
+
+def _iter_months(start: date, end: date) -> list[str]:
+    months: list[str] = []
+    year, month = start.year, start.month
+    while (year, month) <= (end.year, end.month):
+        months.append(f"{year:04d}-{month:02d}")
+        month += 1
+        if month > 12:
+            month = 1
+            year += 1
+    return months
+
+
+def _month_cutoff(month_key: str) -> str:
+    year, month = (int(part) for part in month_key.split("-"))
+    last_day = monthrange(year, month)[1]
+    return f"{year:04d}-{month:02d}-{last_day:02d}"
+
+
+def _snapshot_balance(row: dict[str, Any]) -> float:
+    if "signedBalance" in row:
+        return float(row["signedBalance"])
+    if "balance" in row:
+        return float(row["balance"])
+    raise KeyError("Snapshot row missing signedBalance/balance.")
+
+
+def _paydown_group(account: dict[str, Any]) -> str | None:
+    key = (account.get("type"), account.get("subtype"))
+    for group, keys in PAYDOWN_GROUPS.items():
+        if key in keys:
+            return group
+    return None
+
+
+def _month_end_balances(
+    history: list[dict[str, Any]],
+    months: list[str],
+) -> dict[str, float]:
+    balances: dict[str, float] = {}
+    if not history:
+        return balances
+
+    sorted_history = sorted(history, key=lambda row: row["date"][:10])
+    index = 0
+    latest: dict[str, Any] | None = None
+    for month_key in months:
+        cutoff = _month_cutoff(month_key)
+        while index < len(sorted_history) and sorted_history[index]["date"][:10] <= cutoff:
+            latest = sorted_history[index]
+            index += 1
+        if latest is not None:
+            balances[month_key] = _snapshot_balance(latest)
+    return balances
+
+
+async def _load_account_month_end_balances(
+    account: dict[str, Any],
+    months: list[str],
+    client: Any,
+) -> tuple[dict[str, Any], str, dict[str, float]]:
+    group = _paydown_group(account)
+    if group is None:
+        return account, "", {}
+    history = await client.get_account_history(account_id=account["id"])
+    return account, group, _month_end_balances(history, months)
+
+
+async def _fetch_paydown_snapshots(
+    *,
+    start_date: str,
+    end_date: str,
+) -> list[dict[str, Any]]:
+    response = await get_accounts()
+    accounts = [_slim_account(row) for row in response.get("accounts", [])]
+    tracked = [account for account in accounts if _paydown_group(account) is not None]
+    months = _iter_months(_parse_iso_date(start_date), _parse_iso_date(end_date))
+    totals: dict[str, dict[str, float]] = defaultdict(
+        lambda: {"credit_card": 0.0, "line_of_credit": 0.0},
+    )
+
+    client = get_client()
+    results = await asyncio.gather(
+        *(
+            _load_account_month_end_balances(account, months, client)
+            for account in tracked
+        )
+    )
+
+    rows: list[dict[str, Any]] = []
+    for account, group, month_balances in results:
+        if not group:
+            continue
+        for month_key, balance in month_balances.items():
+            totals[month_key][group] += balance
+            rows.append(
+                {
+                    "month": month_key,
+                    "kind": "account",
+                    "account_id": account["id"],
+                    "account_name": account["name"],
+                    "group": group,
+                    "balance": balance,
+                }
+            )
+
+    for month_key in months:
+        credit_card = totals[month_key]["credit_card"]
+        line_of_credit = totals[month_key]["line_of_credit"]
+        rows.extend(
+            [
+                {"month": month_key, "account_type": "credit_card", "balance": credit_card},
+                {"month": month_key, "account_type": "line_of_credit", "balance": line_of_credit},
+                {
+                    "month": month_key,
+                    "account_type": "paydown",
+                    "balance": credit_card + line_of_credit,
+                },
+            ]
+        )
+    return rows
 
 
 def _normalize_snapshots(
@@ -77,6 +212,11 @@ async def fetch_dataset(
             timeframe="month",
         )
         return _normalize_snapshots(response, account_types=account_types)
+    if dataset == "paydown":
+        return await _fetch_paydown_snapshots(
+            start_date=start_date,
+            end_date=end_date,
+        )
     if dataset == "accounts":
         response = await get_accounts()
         return [_slim_account(row) for row in response.get("accounts", [])]

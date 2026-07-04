@@ -1,0 +1,231 @@
+/* Monarch Money handout — plum/peach design system */
+
+:root {
+  --plum: #6b4e71;
+  --plum-dark: #3d2c44;
+  --plum-mid: #5a4060;
+  --plum-tint: #e8dceb;
+  --peach: #e8a87c;
+  --peach-dark: #c8845a;
+  --peach-tint: #f5d9c2;
+  --bg: #ede3e8;
+  --surface: #f8f1f3;
+  --surface-warm: #f0e4e8;
+  --text: #2d1f32;
+  --text-muted: #6b5b6e;
+  --muted: #6b5b6e;
+  --border: #d9c8dd;
+  --border-strong: #bfa8c5;
+  --card: #ffffff;
+  --accent: #e8a87c;
+  --accent-hover: #c8845a;
+  --radius: 10px;
+  --bar-default: #d9c8dd;
+  --grid: #e8dceb;
+  --on-plum: #f5e8f0;
+}
+
+@page {
+  size: letter;
+  margin: 0.6in;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.page {
+  max-width: 7.3in;
+  margin: 0 auto;
+  padding: 12px 0 24px;
+}
+
+/* Header */
+.page-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.page-title {
+  font-size: 19px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.page-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
+  white-space: nowrap;
+}
+
+/* Section header */
+.section-title {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  color: var(--plum-dark);
+  margin: 0 0 10px;
+}
+
+/* Debt Pay Down layout: left column (card + accounts), right column (chart) */
+.debt-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.debt-left {
+  flex: 0 0 3.15in;
+  width: 3.15in;
+  display: flex;
+  flex-direction: column;
+}
+
+.debt-chart {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Hero KPI — dark plum card */
+.summary-card {
+  background: var(--plum-dark);
+  color: var(--on-plum);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  margin-bottom: 10px;
+  width: 100%;
+}
+
+.summary-heading {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  opacity: 0.65;
+  margin: 0 0 8px;
+}
+
+.summary-card .amount {
+  font-weight: 600;
+  font-size: 26px;
+  line-height: 1.15;
+}
+
+.summary-card .amount.positive {
+  color: var(--peach);
+}
+
+.summary-card .amount.negative {
+  color: #fca5a5;
+}
+
+/* Account table */
+.account-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  table-layout: fixed;
+}
+
+.account-table th {
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-strong);
+  background: var(--surface);
+}
+
+.account-table th:nth-child(1) {
+  width: 46%;
+}
+
+.account-table th:nth-child(2),
+.account-table th:nth-child(3) {
+  width: 27%;
+}
+
+.account-table th:not(:first-child),
+.account-table td:not(:first-child) {
+  text-align: right;
+}
+
+.account-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.account-table td:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-table td.positive {
+  color: var(--peach-dark);
+}
+
+.account-table td.negative {
+  color: #b3261e;
+}
+
+/* Chart panel */
+.panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  background: var(--surface);
+}
+
+.chart-title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.chart-wrap {
+  position: relative;
+  height: 320px;
+  padding: 4px 0;
+}
+
+@media print {
+  body {
+    background: var(--bg);
+  }
+
+  .page {
+    max-width: none;
+    padding: 0;
+  }
+}

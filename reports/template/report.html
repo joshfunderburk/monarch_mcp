@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Monarch Money Review</title>
+  <link rel="stylesheet" href="report.css">
+  <script src="vendor/chart.umd.js"></script>
+</head>
+<body>
+  <article class="page">
+    <header class="page-header">
+      <h1 class="page-title">Funderburk Finances</h1>
+      <p class="page-meta" id="generated-date"></p>
+    </header>
+
+    <h2 class="section-title">Debt Pay Down</h2>
+
+    <section class="debt-section" aria-label="Debt pay down">
+      <div class="debt-left">
+        <div class="summary-card">
+          <p class="summary-heading">Debt Paid Off</p>
+          <div class="amount" id="summary-amount"></div>
+        </div>
+        <table class="account-table" id="account-table">
+          <thead>
+            <tr>
+              <th>Account</th>
+              <th>Balance</th>
+              <th>Change</th>
+            </tr>
+          </thead>
+          <tbody id="account-table-body"></tbody>
+        </table>
+      </div>
+
+      <div class="debt-chart panel">
+        <h3 class="chart-title" id="chart-title"></h3>
+        <div class="chart-wrap">
+          <canvas id="paid-off-chart"></canvas>
+        </div>
+      </div>
+    </section>
+  </article>
+
+  <script>
+    const REPORT_DATA = __REPORT_DATA__;
+
+    function formatCurrency(amount) {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(amount);
+    }
+
+    function formatCurrencySigned(amount) {
+      const sign = amount > 0 ? "+" : amount < 0 ? "-" : "";
+      return `${sign}${formatCurrency(Math.abs(amount))}`;
+    }
+
+    function formatAxisCurrency(amount) {
+      const rounded = Math.round(amount);
+      const sign = rounded < 0 ? "-" : "";
+      const abs = Math.abs(rounded);
+      if (abs >= 1000) {
+        const thousands = abs / 1000;
+        const label = Number.isInteger(thousands) ? thousands : thousands.toFixed(1);
+        return `${sign}$${label}k`;
+      }
+      return `${sign}$${abs}`;
+    }
+
+    function cssVar(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function renderReport() {
+      const data = REPORT_DATA;
+      const paidOff = data.target.paid_off;
+      const isPositive = paidOff >= 0;
+      const accentClass = isPositive ? "positive" : "negative";
+
+      document.getElementById("generated-date").textContent =
+        `Generated ${data.generated_date}`;
+      document.getElementById("chart-title").textContent =
+        "Paid off month over month";
+      const summaryAmountEl = document.getElementById("summary-amount");
+      summaryAmountEl.textContent = formatCurrency(Math.abs(paidOff));
+      summaryAmountEl.classList.add(accentClass);
+
+      const accountTableBody = document.getElementById("account-table-body");
+      accountTableBody.innerHTML = "";
+      for (const account of data.accounts || []) {
+        const row = document.createElement("tr");
+
+        const nameCell = document.createElement("td");
+        nameCell.textContent = account.name;
+        row.appendChild(nameCell);
+
+        const balanceCell = document.createElement("td");
+        balanceCell.textContent = formatCurrency(account.current_debt);
+        row.appendChild(balanceCell);
+
+        const changeCell = document.createElement("td");
+        changeCell.textContent = formatCurrencySigned(account.change);
+        changeCell.classList.add(account.change <= 0 ? "positive" : "negative");
+        row.appendChild(changeCell);
+
+        accountTableBody.appendChild(row);
+      }
+
+      const accent = cssVar("--peach");
+      const barDefault = cssVar("--bar-default");
+      const line = cssVar("--plum");
+      const muted = cssVar("--muted");
+      const grid = cssVar("--grid");
+
+      const labels = data.series.map((point) => point.month_label);
+      const values = data.series.map((point) => point.paid_off);
+      const cumulative = data.series.map((point) => point.cumulative_paid_off);
+      const colors = data.series.map((point) =>
+        point.is_target ? accent : barDefault
+      );
+
+      const ctx = document.getElementById("paid-off-chart").getContext("2d");
+      window.reportChart = new Chart(ctx, {
+        data: {
+          labels,
+          datasets: [
+            {
+              type: "bar",
+              label: "Paid off",
+              data: values,
+              backgroundColor: colors,
+              borderRadius: 6,
+              maxBarThickness: 42,
+              order: 2,
+            },
+            {
+              type: "line",
+              label: "Cumulative paid off",
+              data: cumulative,
+              borderColor: line,
+              backgroundColor: line,
+              borderWidth: 2,
+              pointRadius: 3,
+              pointBackgroundColor: line,
+              tension: 0.25,
+              order: 1,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 0 },
+          plugins: {
+            legend: {
+              display: true,
+              position: "top",
+              align: "end",
+              labels: {
+                boxWidth: 10,
+                color: muted,
+                font: { size: 10, family: "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" },
+              },
+            },
+            tooltip: {
+              callbacks: {
+                label: (context) => `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`,
+              },
+            },
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: {
+                color: muted,
+                font: { size: 10, family: "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" },
+                maxRotation: 45,
+                minRotation: 45,
+              },
+            },
+            y: {
+              grid: {
+                color: grid,
+                drawBorder: false,
+              },
+              ticks: {
+                color: muted,
+                font: { size: 10, family: "-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" },
+                callback: (value) => formatAxisCurrency(value),
+              },
+            },
+          },
+        },
+      });
+
+      window.reportReady = true;
+    }
+
+    renderReport();
+  </script>
+</body>
+</html>

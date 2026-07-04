@@ -162,16 +162,19 @@ Token-efficient pipeline: scripts fetch data to local JSON and generate a PDF. T
 
   Datasets: `snapshots` (monthly balances by account type), `accounts` (current account list), `cashflow` (summary for a date range). Output defaults to `reports/data/<dataset>.json`.
 
-- `scripts/generate_report.py` — build a PDF from fetched snapshot data.
+- `scripts/generate_report.py` — build a PDF handout from fetched JSON (HTML/CSS template + Chart.js, exported via Playwright).
 
   ```bash
-  python scripts/fetch_report_data.py --dataset snapshots
+  python scripts/fetch_report_data.py --dataset paydown
   python scripts/generate_report.py --month 2026-06
+  python scripts/generate_report.py --month 2026-06 --preview
   ```
 
-  Output defaults to `reports/monarch_report_YYYY-MM.pdf`. The first report section shows credit card debt paid off for the month and a trailing month-over-month chart.
+  Output defaults to `reports/monarch_report_YYYY-MM.pdf`. Design lives in `reports/template/` (`report.css`, `report.html`). One-time setup: `playwright install chromium`.
 
-`reports/` is gitignored (contains personal financial data).
+  The first report section shows credit card & line of credit debt paid off for the month and a trailing month-over-month chart.
+
+`reports/data/`, `reports/build/`, and `reports/*.pdf` are gitignored (personal financial data and build artifacts). `reports/template/` is tracked.
 
 ## Development
 
